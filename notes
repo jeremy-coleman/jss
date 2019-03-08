@@ -1,0 +1,1 @@
+ReactNode = Node, just replace with import ReactNode as Node

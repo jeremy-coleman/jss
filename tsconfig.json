@@ -1,12 +1,18 @@
 {
   "compilerOptions": {
-    "strict": true,
-    "target": "es6",
-    "noEmit": true,
+    "target": "es2018",
     "pretty": true,
-    "esModuleInterop": true,
-    "module": "es6",
-    "moduleResolution": "node"
+    "module": "es2015",
+    "jsx":"react",
+    "moduleResolution": "node",
+    "outDir": "build/es",
+    "baseUrl": "./src",
+    "declarationDir": "build/types",
+    "declaration": true,
+    "declarationMap": true,
+    "lib":["dom", "dom.iterable", "esnext"],
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["packages/**/*.ts"]
+  "exclude": ["node_modules"],
+  "include": ["packages/**/*.ts", "src"]
 }

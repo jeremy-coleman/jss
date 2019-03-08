@@ -1,170 +1,82 @@
-import fs from 'fs'
-import path from 'path'
-import nodeResolve from 'rollup-plugin-node-resolve'
-import nodeGlobals from 'rollup-plugin-node-globals'
-import commonjs from 'rollup-plugin-commonjs'
-import babel from 'rollup-plugin-babel'
-import replace from 'rollup-plugin-replace'
-import {terser} from 'rollup-plugin-terser'
-import {sizeSnapshot} from 'rollup-plugin-size-snapshot'
-import camelCase from 'camelcase'
+import path from 'path';
+import commonjs from 'rollup-plugin-commonjs';
+import resolve from 'rollup-plugin-node-resolve';
+import peerDepsExternal from 'rollup-plugin-peer-deps-external'
+var jetpack = require('fs-jetpack')
 
-const getPackageJson = require('./scripts/get-package-json')
 
-const pkg = getPackageJson()
-const rootPath = path.resolve('./')
-const matchSnapshot = process.env.MATCH_SNAPSHOT === 'true'
-const logSnapshot = process.env.LOG_SNAPSHOT === 'true'
-
-const input = path.join(rootPath, './src/index.js')
-
-const name = camelCase(pkg.name)
-
-const globals = {
-  jss: 'jss',
-  'react-jss': 'reactJss',
-  react: 'React'
-}
-
-Object.keys(pkg.peerDependencies || {}).forEach(key => {
-  if (!(key in globals)) {
-    throw new Error(`Missing peer dependency "${key}" in the globals map.`)
-  }
+const PACKAGES = jetpack.find('build/es', { 
+      matching: ["./*"],
+      recursive: false,
+      files: false,
+      directories: true 
 })
 
-const external = id => !id.startsWith('.') && !id.startsWith('/')
 
-const getBabelOptions = ({useESModules}) => ({
-  exclude: /node_modules/,
-  babelrc: false,
-  runtimeHelpers: true,
-  presets: [['@babel/env', {loose: true}], '@babel/flow', '@babel/react'],
-  plugins: [
-    ['@babel/proposal-class-properties', {loose: true}],
-    ['@babel/transform-runtime', {useESModules}],
-    ['@babel/plugin-proposal-export-namespace-from'],
-    ['dev-expression']
-  ]
-})
 
-const commonjsOptions = {
-  include: [
-    /\/node_modules\/react\//,
-    /\/node_modules\/prop-types\//,
-    /\/node_modules\/react-display-name\//,
-    /\/node_modules\/hoist-non-react-statics\//
-  ],
-  ignoreGlobal: true,
-  // The CommonJS plugin can't resolve the exports in `react` automatically.
-  // https://github.com/rollup/rollup-plugin-commonjs#custom-named-exports
-  // https://github.com/reduxjs/react-redux/issues/643#issuecomment-285008041
-  namedExports: {
-    react: ['Component', 'createContext']
-  }
+const MonoPackageDeps = () => {
+let deps = []
+PACKAGES.PKG_JSONS.forEach((pkgJsonFile) => {
+   let theFileContents = jetpack.read(pkgJsonFile, 'json')
+    deps.push(Object.keys({...theFileContents.dependencies, ...theFileContents.devDependences, ...theFileContents.peerDependencies} || {}))
+  })
+  return [...new Set(...deps)]
 }
 
-const snapshotOptions = {
-  matchSnapshot,
-  printInfo: logSnapshot,
-  snapshotPath: './.size-snapshot.json'
+const EXTERNALS = MonoPackageDeps()
+
+async function main() {
+    let results = []
+
+    PACKAGES.PACKAGES.forEach((pkg) => { 
+    
+    const basePath = path.relative(__dirname, pkg)
+    const pkgEntryFileArray = path.join(basePath, 'lib/index.js'); 
+      //console.log(pkg.location)
+
+      //console.log(input)
+
+    results.push({
+        input: pkgEntryFileArray,
+        output: [
+            {
+                file: path.join(basePath, "bundle/index.js"),
+                format: 'es'
+            },
+        ],
+        external: EXTERNALS,
+        plugins: [
+          peerDepsExternal({includeDependencies: true}),
+          //sourcemaps(),
+          resolve({
+              extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs"],
+              browser: true,
+              preferBuiltins: false,
+          }),
+          commonjs({namedExports: {'resource-loader': ['Resource']}}),
+          //typescript()
+          //sucrase({transforms: []})
+          //autoExternal(),
+          //string({include: ['**/*.frag','**/*.vert']}),
+          //replace({__VERSION__: repo.version}),
+          //babelTranspile({extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs"]}),
+          //bubleTranspile(),
+      ],
+    });
+ });
+
+  return results;
 }
 
-const createFlowBundlePlugin = {
-  transformBundle(code, outputOptions) {
-    const file = path.join(rootPath, `${outputOptions.file}.flow`)
-    const content = "// @flow\n\nexport * from '../src';"
-    fs.writeFileSync(file, content)
-  }
-}
+export default main();
 
-export default [
-  {
-    input,
-    output: {
-      file: `dist/${pkg.name}.js`,
-      format: 'umd',
-      sourcemap: true,
-      exports: 'named',
-      name,
-      globals
-    },
-    external: Object.keys(globals),
-    plugins: [
-      nodeResolve(),
-      babel(getBabelOptions({useESModules: true})),
-      commonjs(commonjsOptions),
-      nodeGlobals({process: false}),
-      replace({
-        'process.env.NODE_ENV': JSON.stringify('development'),
-        'process.env.VERSION': JSON.stringify(pkg.version)
-      }),
-      sizeSnapshot(snapshotOptions)
-    ]
-  },
 
-  {
-    input,
-    output: {
-      file: `dist/${pkg.name}.min.js`,
-      format: 'umd',
-      exports: 'named',
-      name,
-      globals
-    },
-    external: Object.keys(globals),
-    plugins: [
-      nodeResolve(),
-      babel(getBabelOptions({useESModules: true})),
-      commonjs(commonjsOptions),
-      nodeGlobals({process: false}),
-      replace({
-        'process.env.NODE_ENV': JSON.stringify('production'),
-        'process.env.VERSION': JSON.stringify(pkg.version)
-      }),
-      sizeSnapshot(snapshotOptions),
-      terser()
-    ]
-  },
 
-  {
-    input,
-    output: {file: pkg.main, format: 'cjs', exports: 'named'},
-    external,
-    plugins: [
-      createFlowBundlePlugin,
-      babel(getBabelOptions({useESModules: false})),
-      nodeGlobals({process: false}),
-      replace({'process.env.VERSION': JSON.stringify(pkg.version)}),
-      sizeSnapshot(snapshotOptions)
-    ]
-  },
 
-  {
-    input,
-    output: {file: pkg.module, format: 'esm'},
-    external,
-    plugins: [
-      babel(getBabelOptions({useESModules: true})),
-      nodeGlobals({process: false}),
-      replace({'process.env.VERSION': JSON.stringify(pkg.version)}),
-      sizeSnapshot(snapshotOptions)
-    ]
-  },
-
-  {
-    input,
-    output: {file: pkg.unpkg, format: 'esm'},
-    plugins: [
-      nodeResolve(),
-      babel(getBabelOptions({useESModules: true})),
-      commonjs(commonjsOptions),
-      nodeGlobals({process: false}),
-      replace({
-        'process.env.NODE_ENV': JSON.stringify('development'),
-        'process.env.VERSION': JSON.stringify(pkg.version)
-      })
-      // size-snapshot is disabled until this is resolved:
-      // https://github.com/TrySound/rollup-plugin-size-snapshot/issues/24
-    ]
-  }
-]
+// const tsFiles = jetpack.find(
+//   'packages', { matching: [
+//     "**/*.js",
+//     "**/*.ts",
+//     "**/*.tsx",
+//     "**/*.jsx"
+// ], files: true, directories: false });

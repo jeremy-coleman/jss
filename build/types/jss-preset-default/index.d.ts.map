@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../src/jss-preset-default/index.ts"],"names":[],"mappings":"AACA,OAAmB,EAAO,OAAO,IAAI,iBAAiB,EAAE,MAAM,kCAAkC,CAAC;AAOjG,OAAoB,EAAO,OAAO,IAAI,kBAAkB,EAAE,MAAM,yBAAyB,CAAC;AAK1F,aAAK,OAAO,GAAG;IACb,WAAW,CAAC,EAAE,kBAAkB,CAAC;IACjC,UAAU,CAAC,EAAE,iBAAiB,CAAA;CAC/B,CAAA;;;;;;;;;;;AAED,wBAeE"}
